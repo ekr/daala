@@ -29,6 +29,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.*/
 #include <stdlib.h>
 #include <stdarg.h>
 
+#include "ogg/os_types.h"
+
 /* Exhaustive list of all the log facilities. */
 typedef enum {
   OD_LOG_GENERIC = 0,
@@ -124,18 +126,25 @@ int od_logging_active_impl(od_log_facility fac, od_log_level level);
 
 /* Log various matrix types. Parameters are:
 
-   F == fmt parameter
-   T == type
-   W == field width
+   T == the type of the array it takes
+   N == the name of the function
 
  */
-#define DECLARE_OD_LOG_MATRIX(T) \
-  int od_log_matrix_##T(od_log_facility facility,   \
-                        od_log_level level,         \
-                        T *values,                  \
-                        int width,               \
+#define DECLARE_OD_LOG_MATRIX(T, N) \
+  int od_log_matrix_##N(od_log_facility facility, \
+                        od_log_level level, \
+                        const char *prefix, \
+                        T *values, \
+                        int width, \
                         int height);
 
-DECLARE_OD_LOG_MATRIX(int)
+
+DECLARE_OD_LOG_MATRIX(char, char)
+DECLARE_OD_LOG_MATRIX(unsigned char, uchar)
+DECLARE_OD_LOG_MATRIX(ogg_int16_t, int16)
+DECLARE_OD_LOG_MATRIX(ogg_uint16_t, uint16)
+DECLARE_OD_LOG_MATRIX(ogg_int32_t, int32)
+DECLARE_OD_LOG_MATRIX(ogg_uint32_t, uint32)
+DECLARE_OD_LOG_MATRIX(float, float)
 
 #endif

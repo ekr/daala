@@ -234,28 +234,30 @@ static int od_log_fprintf_stderr(od_log_facility facility,
 /* Log various matrix types. Parameters are:
 
    T == type
+   N == the name of the function
    F == fmt parameter
-   W == field width
 
  */
-#define DEFINE_OD_LOG_MATRIX(T, F, W)           \
-int od_log_matrix_##T(od_log_facility facility, \
-                      od_log_level level,       \
-                      T *values,                \
-                      int width,             \
-                      int height)            \
- {             \
+#define DEFINE_OD_LOG_MATRIX(T, N, F) \
+int od_log_matrix_##N(od_log_facility facility, \
+                      od_log_level level, \
+                      const char *prefix, \
+                      T *values, \
+                      int width, \
+                      int height) \
+ { \
   size_t buffer_size; \
   size_t current_size; \
   int rv; \
   char *buffer; \
   int h; \
   int w; \
-   \
+ \
   if (!od_logging_active_impl(facility, level)) \
     return 0; \
  \
-  buffer_size = (((W + 1) * width) * height) + 1; \
+  /* Take an initial stab at buffer size */ \
+  buffer_size = sizeof(T) * 2 * width * height; \
   current_size = 0; \
   buffer = (char *)_ogg_malloc(buffer_size); \
   if (!buffer) \
@@ -263,23 +265,33 @@ int od_log_matrix_##T(od_log_facility facility, \
  \
   for (h=0; h<height; ++h) { \
     for (w=0; w<width; ++w) { \
+re_format: \
       rv = snprintf(buffer + current_size, \
                     buffer_size - current_size, \
-                    F, values[(height * h) + w], \
+                    F, \
+                    !w ? prefix : "", \
+                    values[(height * h) + w], \
                     w != (width-1) ? ' ' : '\n'); \
-      OD_ASSERT(((size_t)rv) < (buffer_size - current_size));   \
-      if (((size_t)rv) >= (buffer_size - current_size)) {         \
-        fprintf(stderr, "Internal error in matrix conversion %d %d %s\n", rv, (int)(buffer_size - current_size), buffer); \
-        _ogg_free(buffer); \
-        return 0;  /* TODO: Real error value */ \
+      if (((size_t)rv) >= (buffer_size - current_size)) { \
+        buffer_size *= 2; \
+        if (!(buffer = (char *)_ogg_realloc(buffer, buffer_size))) { \
+          return OD_EFAULT;  /* Out of memory */ \
+        } \
+        goto re_format; \
       } \
       current_size += rv; \
     } \
   } \
-   \
+ \
   od_log(facility, level, "%s", buffer); \
  \
   return 0; \
 }
 
-DEFINE_OD_LOG_MATRIX(int, "%d%c", 11)
+DEFINE_OD_LOG_MATRIX(char, char, "%s%d%c")
+DEFINE_OD_LOG_MATRIX(unsigned char, uchar, "%s%u%c")
+DEFINE_OD_LOG_MATRIX(ogg_int16_t, int16, "%s%d%c")
+DEFINE_OD_LOG_MATRIX(ogg_uint16_t, uint16, "%s%u%c")
+DEFINE_OD_LOG_MATRIX(ogg_int32_t, int32, "%s%d%c")
+DEFINE_OD_LOG_MATRIX(ogg_uint32_t, uint32, "%s%u%c")
+DEFINE_OD_LOG_MATRIX(float, float, "%s%g%c")

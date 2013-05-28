@@ -61,12 +61,29 @@ static void expected_result(const char *expected) {
   }
 }
 
-#define INT_BUFFER_WIDTH 5
-#define INT_BUFFER_HEIGHT 3
+#define BUFFER_WIDTH 5
+#define BUFFER_HEIGHT 3
+
+const char *expected_matrix_int16 =
+    "PREFIX:1000 1001 1002 1003 1004\n"
+    "PREFIX:1003 1004 1005 1006 1007\n"
+    "PREFIX:1006 1007 1008 1009 1010\n";
+
+const char *expected_matrix_float =
+    "PREFIX:1 1.001 1.002 1.003 1.004\n"
+    "PREFIX:1.003 1.004 1.005 1.006 1.007\n"
+    "PREFIX:1.006 1.007 1.008 1.009 1.01\n";
+
+const char *expected_matrix_uint32 =
+    "PREFIX:1000000 1000001 1000002 1000003 1000004\n"
+    "PREFIX:1000003 1000004 1000005 1000006 1000007\n"
+    "PREFIX:1000006 1000007 1000008 1000009 1000010\n";
 
 int main(int argc, char **argv) {
   int i;
-  int int_buffer[INT_BUFFER_WIDTH * INT_BUFFER_HEIGHT];
+  ogg_int16_t int16_buffer[BUFFER_WIDTH * BUFFER_HEIGHT];
+  float float_buffer[BUFFER_WIDTH * BUFFER_HEIGHT];
+  ogg_uint32_t uint32_buffer[BUFFER_WIDTH * BUFFER_HEIGHT];
   (void)argc;
   (void)argv;
   
@@ -129,13 +146,31 @@ int main(int argc, char **argv) {
   OD_LOG((OD_LOG_ENTROPY_CODER, OD_LOG_DEBUG, bogus_fmt_string, "XXX", 9));
 
 
-  /* Test matrixes */
-  for (i=0; i<(INT_BUFFER_WIDTH * INT_BUFFER_HEIGHT); ++i) {
-    int_buffer[i] = 1000 + i;
+  /* Test matrices */
+  for (i=0; i<(BUFFER_WIDTH * BUFFER_HEIGHT); ++i) {
+    int16_buffer[i] = 1000 + i;
   }
-  od_log_matrix_int(OD_LOG_ENTROPY_CODER, OD_LOG_DEBUG,
-                    int_buffer, INT_BUFFER_WIDTH, INT_BUFFER_HEIGHT);
+  reset_result();
+  od_log_matrix_int16(OD_LOG_ENTROPY_CODER, OD_LOG_DEBUG, "PREFIX:",
+                    int16_buffer, BUFFER_WIDTH, BUFFER_HEIGHT);
+  expected_result(expected_matrix_int16);
 
+  for (i=0; i<(BUFFER_WIDTH * BUFFER_HEIGHT); ++i) {
+    float_buffer[i] = 1 + (float)i / 1000;
+  }
+  reset_result();
+  od_log_matrix_float(OD_LOG_ENTROPY_CODER, OD_LOG_DEBUG, "PREFIX:",
+                    float_buffer, BUFFER_WIDTH, BUFFER_HEIGHT);
+  expected_result(expected_matrix_float);
+
+  for (i=0; i<(BUFFER_WIDTH * BUFFER_HEIGHT); ++i) {
+    uint32_buffer[i] = 1000000 + i;
+  }
+  reset_result();
+  od_log_matrix_uint32(OD_LOG_ENTROPY_CODER, OD_LOG_DEBUG, "PREFIX:",
+                       uint32_buffer, BUFFER_WIDTH, BUFFER_HEIGHT);
+  expected_result(expected_matrix_uint32);
+  
   if (failed)
     exit(1);
 
