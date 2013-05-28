@@ -12,11 +12,13 @@ int failed = 0;
 
 static int od_logging_test_emit(od_log_facility facility,
                                 od_log_level level,
+                                unsigned int flags,
                                 const char *fmt, va_list ap) {
   int rv;
 
   (void)facility;
   (void)level;
+  (void)flags;
 
   emitted = 1;
   rv = vsnprintf(tmp_buf, sizeof(tmp_buf), fmt, ap);
@@ -59,10 +61,15 @@ static void expected_result(const char *expected) {
   }
 }
 
+#define INT_BUFFER_WIDTH 5
+#define INT_BUFFER_HEIGHT 3
+
 int main(int argc, char **argv) {
+  int i;
+  int int_buffer[INT_BUFFER_WIDTH * INT_BUFFER_HEIGHT];
   (void)argc;
   (void)argv;
-
+  
   /* Test the basic functionality. */
   setenv("OD_LOG_MODULES", "generic:3", 1);
   od_log_init(od_logging_test_emit);
@@ -120,6 +127,14 @@ int main(int argc, char **argv) {
   bogus_fmt_string[sizeof(bogus_fmt_string) - 2] = 'Y';
   bogus_fmt_string[sizeof(bogus_fmt_string) - 1] = '\0';
   OD_LOG((OD_LOG_ENTROPY_CODER, OD_LOG_DEBUG, bogus_fmt_string, "XXX", 9));
+
+
+  /* Test matrixes */
+  for (i=0; i<(INT_BUFFER_WIDTH * INT_BUFFER_HEIGHT); ++i) {
+    int_buffer[i] = 1000 + i;
+  }
+  od_log_matrix_int(OD_LOG_ENTROPY_CODER, OD_LOG_DEBUG,
+                    int_buffer, INT_BUFFER_WIDTH, INT_BUFFER_HEIGHT);
 
   if (failed)
     exit(1);

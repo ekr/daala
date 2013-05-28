@@ -26,6 +26,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.*/
 #if !defined(_logging_H)
 # define _logging_H (1)
 
+#include <stdlib.h>
 #include <stdarg.h>
 
 /* Exhaustive list of all the log facilities. */
@@ -119,5 +120,22 @@ int od_log_partial(od_log_facility fac, od_log_level level,
 
 /* Ask whether a given logging facility/level is active */
 int od_logging_active_impl(od_log_facility fac, od_log_level level);
+
+
+/* Log various matrix types. Parameters are:
+
+   F == fmt parameter
+   T == type
+   W == field width
+
+ */
+#define DECLARE_OD_LOG_MATRIX(T) \
+  int od_log_matrix_##T(od_log_facility facility,   \
+                        od_log_level level,         \
+                        T *values,                  \
+                        int width,               \
+                        int height);
+
+DECLARE_OD_LOG_MATRIX(int)
 
 #endif
