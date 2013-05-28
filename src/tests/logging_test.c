@@ -170,7 +170,7 @@ int main(int argc, char **argv) {
   od_log_matrix_uint32(OD_LOG_ENTROPY_CODER, OD_LOG_DEBUG, "PREFIX:",
                        uint32_buffer, BUFFER_WIDTH, BUFFER_HEIGHT);
   expected_result(expected_matrix_uint32);
-  
+
   if (failed)
     exit(1);
 
