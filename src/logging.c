@@ -267,7 +267,6 @@ int od_log_matrix_##T(od_log_facility facility, \
                     buffer_size - current_size, \
                     F, values[(height * h) + w], \
                     w != (width-1) ? ' ' : '\n'); \
-      printf("%d %d '%s'\n", h, w, buffer);         \
       OD_ASSERT(((size_t)rv) < (buffer_size - current_size));   \
       if (((size_t)rv) >= (buffer_size - current_size)) {         \
         fprintf(stderr, "Internal error in matrix conversion %d %d %s\n", rv, (int)(buffer_size - current_size), buffer); \
