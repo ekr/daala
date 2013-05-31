@@ -195,6 +195,19 @@ int main(int argc, char **argv) {
                        uint32_buffer, BUFFER_WIDTH, BUFFER_HEIGHT);
   expected_result(expected_matrix_uint32);
 
+  /* Test the debugging mode */
+  setenv("OD_LOG_DEBUG", "1,2,4,5", 1);
+  od_log_init(od_logging_test_emit);
+  reset_result();
+  OD_DEBUG((1, "Test"));
+  expected_something();
+  reset_result();
+  OD_DEBUG((4, "Test"));
+  expected_something();
+  reset_result();
+  OD_DEBUG((3, "Test"));
+  expected_nothing();
+
   if (failed)
     exit(1);
 

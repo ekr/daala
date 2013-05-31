@@ -80,6 +80,7 @@ typedef int (*od_logger_function)(od_log_facility facility,
                                   unsigned int flags,
                                   const char *fmt, va_list ap);
 #define OD_LOG_FLAG_PARTIAL  1
+#define OD_LOG_FLAG_FORCE    2
 
 int od_log_init(od_logger_function logger);
 
@@ -98,9 +99,11 @@ int od_log_init(od_logger_function logger);
 # define OD_LOG(a)
 /*Hack to accomodate non-newline printfs.*/
 # define OD_LOG_PARTIAL(a)
+# define OD_DEBUG(a)
 # define od_logging_active(a, b) 0
 #else
 # define OD_LOG(a) od_log a
+# define OD_DEBUG(a) od_debug a
 /*Hack to accomodate non-newline printfs.*/
 # define OD_LOG_PARTIAL(a) od_log_partial a
 # define od_logging_active od_logging_active_impl
@@ -110,6 +113,12 @@ int od_log(od_log_facility fac, od_log_level level,
            const char *fmt, ...)
 #ifdef __GNUC__
   __attribute__ ((format (printf, 3, 4)))
+#endif
+;
+
+int od_debug(unsigned int od_debug_index, const char *fmt, ...)
+#ifdef __GNUC__
+  __attribute__ ((format (printf, 2, 3)))
 #endif
 ;
 

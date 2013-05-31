@@ -61,7 +61,8 @@ static const char *od_log_facility_name(od_log_facility facility);
 static const char *od_log_level_name(od_log_level level);
 
 static od_logger_function od_logger = od_log_fprintf_stderr;
-
+static unsigned int *od_log_debugging_levels;
+static unsigned int od_log_num_debugging_levels;
 
 static const char *od_log_facility_name(od_log_facility fac) {
   /* Check for invalid input */
@@ -99,58 +100,106 @@ int od_log_init(od_logger_function logger) {
     od_logger = logger;
 
   ptr = getenv("OD_LOG_MODULES");
-  if (!ptr)
-    return 0;
+  if (ptr) {
+    /* Break up the string. This is manual because strtok is evil. */
+    nextptr = ptr;
+    for (;;) {
+      ptr = nextptr;
+      if (!*ptr)
+        break;
 
-  /* Break up the string. This is manual because strtok is evil. */
-  nextptr = ptr;
-  for (;;) {
-    ptr = nextptr;
-    if (!*ptr)
-      break;
+      comma = strchr(ptr, ',');
+      if (comma) {
+        *comma = '\0';
+        nextptr = comma + 1;
+      }
+      else {
+        nextptr = ptr + strlen(ptr);
+      }
 
-    comma = strchr(ptr, ',');
-    if (comma) {
-      *comma = '\0';
+      /* At this point, ptr points to a single <facility>:<level> clause */
+      colon = strchr(ptr, ':');
+      if (!colon) {
+        /* Generate an error and skip ahead */
+        fprintf(stderr, "Bogus clause '%s'\n", ptr);
+        continue;
+      }
+
+      /* At this point, we should theoretically have a valid clause */
+      *colon = '\0';
+      ++colon; /* Now points to the start of the number. */
+
+      for (i = 0; i < OD_LOG_FACILITY_MAX; ++i) {
+        if (od_log_module_names[i] && !strcmp(ptr, od_log_module_names[i])) {
+          break;  /* Success */
+        }
+      }
+
+      if (i == OD_LOG_FACILITY_MAX) {
+        fprintf(stderr, "Unknown facility '%s'\n", ptr);
+        continue;
+      }
+
+      if (!*colon) {
+        fprintf(stderr, "Empty log level\n");
+        continue;
+      }
+      level = strtoul(colon, &endptr, 10);
+      if (*endptr) {
+        fprintf(stderr, "Could not convert log level '%s'\n", colon);
+        continue;
+      }
+      od_log_levels[i] = level;
+    }
+  }
+
+  ptr = getenv("OD_LOG_DEBUG");
+  if (ptr) {
+    int max_levels;
+
+    i = 1;
+
+    /* Count the maximum number of values */
+    nextptr = ptr;
+    while ((comma = strchr(nextptr, ','))) {
+      ++i;
       nextptr = comma + 1;
     }
-    else {
-      nextptr = ptr + strlen(ptr);
+    max_levels = i;
+
+    /* Potential overflow */
+    if ((INT_MAX / sizeof(unsigned int)) < (unsigned int)i) {
+      fprintf(stderr, "Too many debugging levels specified\n");
+      return 0;
     }
-
-    /* At this point, ptr points to a single <facility>:<level> clause */
-    colon = strchr(ptr, ':');
-    if (!colon) {
-      /* Generate an error and skip ahead */
-      fprintf(stderr, "Bogus clause '%s'\n", ptr);
-      continue;
+    
+    if (!(od_log_debugging_levels = (unsigned int *)
+          _ogg_malloc(max_levels * sizeof(unsigned int)))) {
+      fprintf(stderr, "Could not allocate memory for debugging levels\n");
+      return 0;
     }
-
-    /* At this point, we should theoretically have a valid clause */
-    *colon = '\0';
-    ++colon; /* Now points to the start of the number. */
-
-    for (i = 0; i < OD_LOG_FACILITY_MAX; ++i) {
-      if (od_log_module_names[i] && !strcmp(ptr, od_log_module_names[i])) {
-        break;  /* Success */
+    
+    /* Now read in the values */
+    nextptr = ptr;
+    while(nextptr) {
+      ptr = nextptr;
+      comma = strchr(ptr, ',');
+      if (comma) {
+        *comma = '\0';
+        nextptr = comma+1;
       }
-    }
+      else {
+        nextptr = NULL;
+      }
+      
+      level = strtoul(ptr,  &endptr, 10);
+      if (*endptr) {
+        fprintf(stderr, "Could not convert log level '%s'\n", nextptr);
+        continue;
+      }
 
-    if (i == OD_LOG_FACILITY_MAX) {
-      fprintf(stderr, "Unknown facility '%s'\n", ptr);
-      continue;
+      od_log_debugging_levels[od_log_num_debugging_levels++] = level;
     }
-
-    if (!*colon) {
-      fprintf(stderr, "Empty log level\n");
-      continue;
-    }
-    level = strtoul(colon, &endptr, 10);
-    if (*endptr) {
-      fprintf(stderr, "Could not convert log level '%s'\n", colon);
-      continue;
-    }
-    od_log_levels[i] = level;
   }
 
   return 0;
@@ -170,8 +219,10 @@ int od_logging_active_impl(od_log_facility fac, od_log_level level) {
 
 static int od_log_impl(od_log_facility fac, od_log_level level, unsigned int flags,
                        const char *fmt, va_list ap) {
-  if (!od_logging_active(fac, level))
-    return 0;
+  if (!(flags & OD_LOG_FLAG_FORCE)) {
+    if (!od_logging_active(fac, level))
+      return 0;
+  }
 
   (void)od_logger(fac, level, flags, fmt, ap);
 
@@ -189,6 +240,30 @@ int od_log(od_log_facility fac, od_log_level level, const char *fmt, ...) {
   return rv;
 }
 
+int od_debug(unsigned int debug_token, const char *fmt, ...) {
+  va_list ap;
+  int rv;
+  unsigned int i;
+  int enabled = 0;
+
+  for (i=0; i<od_log_num_debugging_levels; i++) {
+    if (od_log_debugging_levels[i] == debug_token) {
+      enabled = 1;
+      break;
+    }
+  }
+
+  if (!enabled)
+    return 0;
+
+  va_start(ap, fmt);
+  rv = od_log_impl(OD_LOG_GENERIC, OD_LOG_DEBUG, OD_LOG_FLAG_FORCE,
+                   fmt, ap);
+  va_end(ap);
+  
+  return rv;
+}
+
 int od_log_partial(od_log_facility fac, od_log_level level, const char *fmt, ...) {
   va_list ap;
   int rv;
@@ -199,7 +274,6 @@ int od_log_partial(od_log_facility fac, od_log_level level, const char *fmt, ...
 
   return rv;
 }
-
 
 static int od_log_fprintf_stderr(od_log_facility facility,
                                  od_log_level level,
@@ -228,8 +302,6 @@ static int od_log_fprintf_stderr(od_log_facility facility,
 
  return 0;
 }
-
-
 
 /* Log various matrix types. Parameters are:
 
