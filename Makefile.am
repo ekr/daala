@@ -2,6 +2,8 @@
 
 lib_LTLIBRARIES = src/libdaalabase.la src/libdaaladec.la src/libdaalaenc.la
 
+AM_CPPFLAGS = -I$(srcdir)/include
+
 noinst_HEADERS = \
 	src/adapt.h \
 	src/block_size.h \
@@ -26,7 +28,7 @@ noinst_HEADERS = \
 	src/tf.h
 
 src_libdaalabase_la_CFLAGS = $(OGG_CFLAGS)
-src_libdaalabase_la_LIBADD = $(OGG_LIBS)
+src_libdaalabase_la_LIBADD = $(OGG_LIBS) -lm
 if DUMP_IMAGES
   src_libdaalabase_la_LIBADD += $(PNG_LIBS)
 endif
@@ -56,7 +58,10 @@ src_libdaalabase_la_SOURCES = \
 	src/pvq_encoder.c \
 	src/state.c \
 	src/switch_table.c \
-	src/tf.c
+	src/tf.c \
+	src/zigzag4.c \
+	src/zigzag8.c \
+	src/zigzag16.c
 if ENABLE_X86ASM
 src_libdaalabase_la_SOURCES += \
 	src/x86/cpu.c \
@@ -75,7 +80,8 @@ src_libdaaladec_la_LDFLAGS = -no-undefined \
  -version-info @OD_LT_CURRENT@:@OD_LT_REVISION@:@OD_LT_AGE@
 src_libdaaladec_la_SOURCES = \
 	src/block_size_dec.c \
-	src/decode.c
+	src/decode.c \
+	src/infodec.c
 
 src_libdaalaenc_la_CFLAGS = $(OGG_CFLAGS)
 src_libdaalaenc_la_LIBADD = src/libdaalabase.la $(OGG_LIBS)
@@ -87,11 +93,10 @@ src_libdaalaenc_la_LDFLAGS = -no-undefined \
 src_libdaalaenc_la_SOURCES = \
 	src/block_size_dec.c \
 	src/block_size_enc.c \
-	src/encode.c \
 	src/decode.c \
+	src/encode.c \
 	src/infoenc.c \
 	src/mcenc.c
-
 
 # Example programs
 
@@ -115,8 +120,8 @@ if DUMP_IMAGES
 endif
 
 examples_player_example_SOURCES = examples/player_example.c
-examples_player_example_CFLAGS = $(OGG_CFLAGS)
-examples_player_example_LDADD = src/libdaalabase.la src/libdaalaenc.la $(OGG_LIBS)
+examples_player_example_CFLAGS = $(OGG_CFLAGS) $(SDL_CFLAGS)
+examples_player_example_LDADD = src/libdaalabase.la src/libdaaladec.la $(OGG_LIBS) $(SDL_LIBS)
 if DUMP_IMAGES
   examples_player_example_LDADD += $(PNG_LIBS)
 endif
@@ -367,25 +372,45 @@ tools_gen_laplace_tables_LDADD = $(OGG_LIBS) $(PNG_LIBS) -lm
 noinst_PROGRAMS += \
 	src/tests/ectest \
 	src/tests/test_coef_coder \
-	src/tests/logging_test
+	src/tests/logging_test \
+	src/tests/check_tests
 
 TESTS = \
 	src/tests/ectest \
 	src/tests/test_coef_coder \
-	src/tests/logging_test
+	src/tests/logging_test \
+	src/tests/check_tests
 
 src_tests_ectest_SOURCES = src/tests/ectest.c
 src_tests_ectest_CFLAGS = $(OGG_CFLAGS)
 src_tests_ectest_LDADD = -lm
 
 src_tests_test_coef_coder_SOURCES = src/tests/test_coef_coder.c
-src_tests_test_coef_coder_CFLAGS = $(OGG_CFLAGS)	
-src_tests_test_coef_coder_LDADD = src/libdaalabase.la src/libdaaladec.la $(OGG_LIBS) -lm
+src_tests_test_coef_coder_CFLAGS = $(OGG_CFLAGS)
+src_tests_test_coef_coder_LDADD = \
+ src/libdaalabase.la \
+ src/libdaaladec.la \
+ $(OGG_LIBS) \
+ -lm
 
 src_tests_logging_test_SOURCES = src/tests/logging_test.c
-src_tests_logging_test_CFLAGS = $(OGG_CFLAGS)	
-src_tests_logging_test_LDADD = src/libdaalabase.la src/libdaalaenc.la  $(OGG_LIBS)
+src_tests_logging_test_CFLAGS = $(OGG_CFLAGS)
+src_tests_logging_test_LDADD = \
+ src/libdaalabase.la \
+ src/libdaalaenc.la \
+ $(OGG_LIBS)
 
+src_tests_check_tests_SOURCES = \
+ src/tests/check_main.c \
+ src/tests/headerencode_test.c
+src_tests_check_tests_CFLAGS = $(OGG_CFLAGS)
+src_tests_check_tests_LDADD = \
+ src/libdaalabase.la \
+ src/libdaaladec.la \
+ src/libdaalaenc.la \
+ $(OGG_LIBS) \
+ $(CHECK_LIBS) \
+ -lm
 
 # Docs
 
@@ -472,7 +497,7 @@ daala: all
 install-daala: install
 
 # Or just the docs
-#docs: doc/doxygen-build.stamp
+docs: doc/doxygen-build.stamp
 
 install-docs:
 	@if [ -z "$(NO_DOXYGEN)" ]; then \
@@ -484,8 +509,7 @@ install-docs:
 	    done ) \
 	fi
 
-doc/doxygen-build.stamp: doc/Doxyfile $(top_srcdir)/doc/daala_logo.svg \
-                         $(top_srcdir)/include/*.h
+doc/doxygen-build.stamp: doc/Doxyfile $(daalainclude_HEADERS)
 	@[ -n "$(NO_DOXYGEN)" ] || ( cd doc && doxygen && touch $(@F) )
 
 
@@ -499,6 +523,7 @@ install-data-local: install-docs
 clean-local:
 	$(RM) -r doc/html
 	$(RM) -r doc/latex
+	$(RM) -r doc/man
 	$(RM) doc/doxygen-build.stamp
 
 uninstall-local:

@@ -1,5 +1,5 @@
 /*Daala video codec
-Copyright (c) 2013 Daala project contributors.  All rights reserved.
+Copyright (c) 2001-2013 Daala project contributors.  All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
@@ -22,23 +22,21 @@ CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.*/
 
-#if !defined(_tf_H)
-# define _tf_H (1)
-# include "filter.h"
+#include <stdlib.h>
+#include <check.h>
 
-extern const unsigned char od_upright_table[8];
+Suite *headerencode_suite();
 
-/* Returns whether the up-right is unavailable */
-#define OD_UPRIGHT_UNAVAIL(x,y,csize) \
- (((od_upright_table)[(y)>>(csize)] >> ((x)>>csize)) & 1)
+int main(int _argc,char **_argv) {
+  int number_failed;
+  SRunner *sr;
 
-void od_tf_up_h_lp(od_coeff *dst,int dstride,
- const od_coeff *src, int sstride, int dx, int n);
-
-void od_tf_up_v_lp(od_coeff *dst, int dstride,
- const od_coeff *src, int sstride, int dy, int n);
-
-void od_tf_up_hv_lp(od_coeff *dst, int dstride,
- const od_coeff *src, int sstride, int dx, int dy, int n);
-
-#endif
+  (void)_argc;
+  (void)_argv;
+  sr = srunner_create(headerencode_suite());
+  srunner_set_fork_status(sr, CK_NOFORK);
+  srunner_run_all(sr, CK_VERBOSE);
+  number_failed = srunner_ntests_failed(sr);
+  srunner_free(sr);
+  return (number_failed == 0) ? EXIT_SUCCESS : EXIT_FAILURE;
+}

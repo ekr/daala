@@ -42,7 +42,7 @@ static int od_dec_init(od_dec_ctx *dec, const daala_info *info,
   (void)setup;
   ret = od_state_init(&dec->state, info);
   if (ret < 0) return ret;
-  dec->packet_state = OD_PACKET_INFO_HDR;
+  dec->packet_state = OD_PACKET_DATA;
   return 0;
 }
 
@@ -78,7 +78,8 @@ int daala_decode_ctl(daala_dec_ctx *dec, int req, void *buf, size_t buf_sz) {
   }
 }
 
-int daala_decode_img_out(daala_dec_ctx *dec, od_img *img) {
+int daala_decode_packet_in(daala_dec_ctx *dec, od_img *img,
+ const ogg_packet *op) {
   int nplanes;
   int pli;
   int scale[OD_NPLANES_MAX];
@@ -88,34 +89,45 @@ int daala_decode_img_out(daala_dec_ctx *dec, od_img *img) {
   int pic_height;
   int nvsb;
   int nhsb;
+  int refi;
   int i;
   int j;
-  if (dec == NULL || img == NULL) return OD_EFAULT;
+  if (dec == NULL || img == NULL || op == NULL) return OD_EFAULT;
   if (dec->packet_state != OD_PACKET_DATA) return OD_EINVAL;
-  /*Check the input image dimensions to make sure they're compatible with the
-     declared video size.*/
-  nplanes = dec->state.info.nplanes;
-  if (img->nplanes != nplanes) return OD_EINVAL;
-  for (pli = 0; pli < nplanes; pli++) {
-    if (img->planes[pli].xdec != dec->state.info.plane_info[pli].xdec
-      || img->planes[pli].ydec != dec->state.info.plane_info[pli].ydec) {
-      return OD_EINVAL;
+  if (op->e_o_s) dec->packet_state = OD_PACKET_DONE;
+  od_ec_dec_init(&dec->ec, op->packet, op->bytes);
+  /*Read the packet type bit.*/
+  if (od_ec_decode_bool_q15(&dec->ec, 16384)) return OD_EBADPACKET;
+  /*Update the buffer state.*/
+  if (dec->state.ref_imgi[OD_FRAME_SELF] >= 0) {
+    dec->state.ref_imgi[OD_FRAME_PREV] =
+     dec->state.ref_imgi[OD_FRAME_SELF];
+    /*TODO: Update golden frame.*/
+    if (dec->state.ref_imgi[OD_FRAME_GOLD] < 0) {
+      dec->state.ref_imgi[OD_FRAME_GOLD] =
+       dec->state.ref_imgi[OD_FRAME_SELF];
+      /*TODO: Mark keyframe timebase.*/
     }
   }
+  /*Select a free buffer to use for this reference frame.*/
+  for (refi = 0; refi == dec->state.ref_imgi[OD_FRAME_GOLD]
+   || refi == dec->state.ref_imgi[OD_FRAME_PREV]
+   || refi == dec->state.ref_imgi[OD_FRAME_NEXT]; refi++);
+  dec->state.ref_imgi[OD_FRAME_SELF] = refi;
   nhsb = dec->state.nhsb;
   nvsb = dec->state.nvsb;
-  for(i = 0; i < (nhsb+1)*4; i++) {
-    for(j = 0; j < 4; j++) {
+  for(i = -4; i < nhsb*4; i++) {
+    for(j = -4; j < 0; j++) {
       dec->state.bsize[(j*dec->state.bstride) + i] = 3;
     }
   }
-  for(j = 0; j < (nvsb+1)*4; j++) {
-    for(i = 0; i < 4; i++) {
+  for(j = -4; j < nvsb*4; j++) {
+    for(i = -4; i < 0; i++) {
       dec->state.bsize[(j*dec->state.bstride) + i] = 3;
     }
   }
-  for(i = 1; i < nvsb + 1; i++) {
-    for(j = 1; j < nhsb + 1; j++) {
+  for(i = 0; i < nvsb; i++) {
+    for(j = 0; j < nhsb; j++) {
       od_block_size_decode(&dec->ec, &dec->state.bsize[4*dec->state.bstride*i + 4*j], dec->state.bstride);
     }
   }
@@ -124,14 +136,6 @@ int daala_decode_img_out(daala_dec_ctx *dec, od_img *img) {
   frame_height = dec->state.frame_height;
   pic_width = dec->state.info.pic_width;
   pic_height = dec->state.info.pic_height;
-  if (img->width != frame_width || img->height != frame_height) {
-    /*The buffer does not match the frame size.
-      Check to see if it matches the picture size.*/
-    if ( img->width != pic_width || img->height != pic_height) {
-      /*It doesn't; we don't know how to handle it yet.*/
-      return OD_EINVAL;
-    }
-  }
   {
     GenericEncoder model_dc[OD_NPLANES_MAX];
     GenericEncoder model_g[OD_NPLANES_MAX];
@@ -164,6 +168,7 @@ int daala_decode_img_out(daala_dec_ctx *dec, od_img *img) {
     for (mi = 0; mi < OD_INTRA_NMODES; mi++) {
      mode_p0[mi] = 32768/OD_INTRA_NMODES;
     }
+    nplanes = dec->state.io_imgs[OD_FRAME_INPUT].nplanes;
     for (pli = 0; pli < nplanes; pli++) {
       generic_model_init(model_dc + pli);
       generic_model_init(model_g + pli);
@@ -449,5 +454,9 @@ int daala_decode_img_out(daala_dec_ctx *dec, od_img *img) {
   od_state_upsample8(&dec->state,
    dec->state.ref_imgs + dec->state.ref_imgi[OD_FRAME_SELF],
    dec->state.io_imgs + OD_FRAME_REC);
+  /*Return decoded frame.*/
+  *img = dec->state.io_imgs[OD_FRAME_REC];
+  img->width = dec->state.info.pic_width;
+  img->height = dec->state.info.pic_height;
   return 0;
 }
